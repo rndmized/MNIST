@@ -6,6 +6,8 @@
 import gzip
 import numpy as np
 import PIL.Image as pil 
+import time
+
 #TRAINING SET LABEL FILE (train-labels-idx1-ubyte):
 #[offset] [type]          [value]          [description] 
 #0000     32 bit integer  0x00000801(2049) magic number (MSB first) 
@@ -28,17 +30,22 @@ def print_image(image):
                 img_representation += "#"
         print(img_representation)
 
-
+# Code from lab
 def read_labels_from_file(filename):
-    with gzip.open(filename,'rb ') as f:
+    print("Reading "+  filename + " please wait...")
+    t = time.time()
+    with gzip.open(filename,'rb') as f:
         magic = int.from_bytes(f.read(4),byteorder='big')
         size = int.from_bytes(f.read(4),byteorder='big')
         labels = [f.read(1) for i in range(size)]
         labels = [int.from_bytes(label,'big') for label in labels]
+    print("Label reading finished!")
+    print("Elapsed Time:",(time.time() - t))
     return labels
 
 def read_images_from_file(filename):
-    print("Reading images please wait...")
+    print("Reading "+  filename + " please wait...")
+    t = time.time()
     with gzip.open(filename,'rb') as f:
     #Knowing the bytes and the offset extract necesary data
     #for the image processing
@@ -50,40 +57,68 @@ def read_images_from_file(filename):
         #Values for reference
         #print(magic,size, "rows", rows, "columns", columns )
         
+        # Adapted from
+        # https://gist.github.com/akesling/5358964#file-mnist-py-L26
+        # And
+        # https://github.com/alexpt2000gmit/4Year_ReadTheMNISTDataFiles/blob/master/1_Read%20the%20data%20files.py
+        buffer = f.read(rows * columns * size)
+        images = np.frombuffer(buffer, dtype=np.uint8).astype(np.float32)
+        images = images.reshape(size, rows, columns)
 
-        i, j, k = 0, 0, 0
+        # Original code for reading images from file commented out
         #Create array to contain the images based on the amount of images and its size(rows and columns)
-        images=[[[0 for j in range(rows)] for i in range(columns)] for k in range(size)]
         #Read in the pixels into the array
-        for k in range(size):
-            for i in range(rows):
-                for j in range(columns):
-                    images[k][i][j] = int.from_bytes(f.read(1),byteorder='big')
+        #i, j, k = 0, 0, 0
+        #images=[[[0 for j in range(rows)] for i in range(columns)] for k in range(size)]
+        #for k in range(size):
+        #    for i in range(rows):
+        #        for j in range(columns):
+        #            images[k][i][j] = int.from_bytes(f.read(1),byteorder='big')
         
-    print("File reading finished!")
+    print("Image reading finished!")
+    print("Elapsed Time:",(time.time() - t))
 
     return images
 
-def save_images_as_png(image, image_number):
+def save_images_as_png(image, image_number, label, image_type):
     img = pil.fromarray(np.array(image))
     img = img.convert('RGB')
-    image_name = 'img/img-' + str(image_number) +'.png'
+    # cast number into string to identify the image
+    image_name = 'img/'+ image_type +'-' + str(image_number)+'-' + str(label) +'.png'
     img.save(image_name)
     img.show()
     
     
-#data/train-images-idx3-ubyte.gz
-#data/t10k-images-idx3-ubyte.gz
-images = read_images_from_file('data/t10k-images-idx3-ubyte.gz')
+# Read Images and Labels from Files
+train_labels = read_labels_from_file('data/train-labels-idx1-ubyte.gz')
+test_labels = read_labels_from_file('data/t10k-labels-idx1-ubyte.gz')
+train_images = read_images_from_file('data/train-images-idx3-ubyte.gz')
+test_images = read_images_from_file('data/t10k-images-idx3-ubyte.gz')
+
+
+
 
 #Provide some sort of interface to select and print the images in memory
-while True:
-    message = 'Select image number to display (select from 1 - ' + str(len(images)) + ', 0 to exit):'
+while (True):
+    message = 'Select set : [0]Training [1]Testing  '
     n = int(input(message))
-    #If number equals 0 or it is higher than the number of images terminate loop
-    if n != 0 and n < len(images)+1:
-        #Reduce n (array from 0 to size) by one.
-        print_image(images[n-1])
-        save_images_as_png(images[n-1], n-1)
+    if (n == 0):
+        default_images = train_images
+        default_labels = train_labels
+        image_type = 'train'
+    elif(n == 1):
+        default_images = test_images
+        default_labels = test_labels
+        image_type = 'test'
     else:
-        break
+        break;
+
+    while True:
+        message = 'Select image number to display (select from 0 - ' + str(len(default_images)-1) + ', -1 to exit):'
+        n = int(input(message))
+        #If number equals -1 or it is higher than the number of images terminate loop
+        if n != -1 and n < len(default_images):
+            print_image(default_images[n])
+            save_images_as_png(default_images[n], n,default_labels[n], image_type)
+        else:
+            break
